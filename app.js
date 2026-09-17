@@ -119,7 +119,7 @@ function callDeepseek(messages, temp) {
   return fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
-    body: JSON.stringify({ model: "deepseek-chat", messages: messages, temperature: temp || 0.6, stream: false }),
+    body: JSON.stringify({ model: "deepseek-v4-flash", messages: messages, temperature: temp || 0.6, stream: false, thinking: { type: "disabled" } }),
   }).then(function (r) {
     return r.json().then(function (d) {
       if (!r.ok) throw new Error((d && d.error && d.error.message) || ("API 错误 " + r.status));
@@ -636,7 +636,7 @@ function renderSettings() {
     "总词数 " + st.total + " · 已学 " + st.learned + " · 到期待复习 " + st.due_today + " · 错题 " + st.wrong_total +
     "<br>状态分布：新 " + st.by_status.new + " / 学习中 " + st.by_status.learning + " / 复习 " + st.by_status.review + " / 熟记 " + st.by_status.mature +
     "<br>题库：书内真题+生成题 " + QUESTIONS.length + " 道 · 四海题本 " + SIHAI.length + " 道" +
-    "<br><br>版本 v3" +
+    "<br><br>版本 v4" +
     "</div></div>";
   $("#save-settings").addEventListener("click", function () {
     prog.settings.daily_new = Math.min(100, Math.max(1, parseInt($("#set-daily").value, 10) || 20));
