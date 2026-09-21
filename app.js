@@ -23,7 +23,7 @@ function esc(s) {
 }
 
 /* ---------- 数据 ---------- */
-var SECTIONS = [], WORDS = [], QUESTIONS = [], CONFUSABLES = [], SIHAI = [];
+var SECTIONS = [], WORDS = [], QUESTIONS = [], CONFUSABLES = [], SIHAI = [], SHIZHENG = [];
 var WORD_INDEX = {}, WORD_ORDER = {};
 
 function loadData() {
@@ -33,8 +33,9 @@ function loadData() {
     fetch("./data/questions.json").then(function (r) { return r.json(); }),
     fetch("./data/confusables.json").then(function (r) { return r.json(); }),
     fetch("./data/sihai_questions.json").then(function (r) { return r.json(); }),
+    fetch("./data/shizheng.json").then(function (r) { return r.json(); }),
   ]).then(function (rs) {
-    SECTIONS = rs[0]; WORDS = rs[1]; QUESTIONS = rs[2]; CONFUSABLES = rs[3]; SIHAI = rs[4];
+    SECTIONS = rs[0]; WORDS = rs[1]; QUESTIONS = rs[2]; CONFUSABLES = rs[3]; SIHAI = rs[4]; SHIZHENG = rs[5];
     WORD_INDEX = {};
     WORDS.forEach(function (w) { WORD_INDEX[w.id] = w; });
     WORD_ORDER = {};
@@ -207,6 +208,7 @@ var curTab = "study";
 var studyQueue = [];
 var practiceCfg = { mode: "mixed", count: 10 };
 var practiceList = [], practiceIdx = 0, practiceScore = 0;
+var szCfg = { cat: "全部", count: 10 };
 
 function switchTab(name) {
   curTab = name;
@@ -216,6 +218,7 @@ function switchTab(name) {
   if (name === "study") renderStudy();
   else if (name === "library") renderLibrary();
   else if (name === "practice") renderPracticeHome();
+  else if (name === "shizheng") renderShizheng();
   else if (name === "confus") renderConfus();
   else renderSettings();
 }
@@ -481,7 +484,11 @@ function startPractice() {
     practiceList = seededShuffle(pool, dateSeed(todayStr() + Math.random())).slice(0, count);
   } else if (practiceCfg.mode === "wrong") {
     var prog = loadProgress();
-    pool = QUESTIONS.concat(SIHAI).filter(function (q) { return prog.wrong_book[q.id]; });
+    pool = QUESTIONS.concat(SIHAI, SHIZHENG).filter(function (q) { return prog.wrong_book[q.id]; });
+    practiceList = seededShuffle(pool, dateSeed(todayStr() + Math.random())).slice(0, count);
+  } else if (practiceCfg.mode === "shizheng") {
+    var cat = szCfg.cat;
+    pool = cat && cat !== "全部" ? SHIZHENG.filter(function (q) { return q.cat === cat; }) : SHIZHENG.slice();
     practiceList = seededShuffle(pool, dateSeed(todayStr() + Math.random())).slice(0, count);
   } else {
     // 混合：四海题本与现有题库各半
@@ -504,7 +511,8 @@ function startPractice() {
 function renderQuestion() {
   var q = practiceList[practiceIdx];
   var src = q.source === "real" ? "真题 · " + q.year + " " + q.exam
-    : (q.source === "sihai" ? "四海题本 · " + q.section + " 第" + q.number + "题" : "练习题");
+    : (q.source === "sihai" ? "四海题本 · " + q.section + " 第" + q.number + "题"
+      : (q.source === "sz" ? "时政常识 · " + (q.cat || "") : "练习题"));
   main.innerHTML =
     '<div class="muted" style="margin-bottom:10px">' + (practiceIdx + 1) + " / " + practiceList.length + " · " + esc(src) + "</div>" +
     '<div class="card">' +
@@ -513,7 +521,8 @@ function renderQuestion() {
       return '<button class="option" data-i="' + i + '">' + String.fromCharCode(65 + i) + "．" + esc(o.text) + "</button>";
     }).join("") +
     '<div id="after" style="display:none">' +
-    '<div class="explain-box"><b>答案 ' + esc(q.answer) + "</b>" + (q.explanation ? "<br>" + esc(q.explanation) : "") + "</div>" +
+    '<div class="explain-box"><b>答案 ' + esc(q.answer) + "</b>" + (q.explanation ? "<br>" + esc(q.explanation) : "") +
+    (q.src ? '<div class="muted" style="margin-top:6px">来源：' + esc(q.src) + "</div>" : "") + "</div>" +
     '<div class="muted" id="word-links" style="margin-bottom:10px"></div>' +
     '<button class="btn" id="next-q">' + (practiceIdx + 1 < practiceList.length ? "下一题" : "查看结果") + "</button>" +
     "</div></div>";
@@ -585,6 +594,40 @@ function showWordModal(wid) {
   $("#m-explain").addEventListener("click", function (e) { e.stopPropagation(); mask.remove(); showAiExplain(w.id); });
 }
 
+/* ================= 时政常识 ================= */
+var SZ_CATS = ["全部", "政治常识", "时政2025-2026", "物理", "化学", "生物"];
+function renderShizheng() {
+  szCfg = szCfg || { cat: "全部", count: 10 };
+  var html = "<h1>时政常识</h1>" +
+    '<div class="card">' +
+    '<div class="muted" style="margin-bottom:8px">分类</div>' +
+    '<div class="seg wrap" id="sz-cats">' +
+    SZ_CATS.map(function (c) {
+      var n = c === "全部" ? SHIZHENG.length : SHIZHENG.filter(function (q) { return q.cat === c; }).length;
+      return '<button data-c="' + c + '" class="' + (szCfg.cat === c ? "on" : "") + '">' + esc(c) + "（" + n + "）</button>";
+    }).join("") +
+    "</div>" +
+    '<div class="muted" style="margin:14px 0 8px">题数</div>' +
+    '<div class="seg">' +
+    [5, 10, 20, 50].map(function (n) {
+      return '<button data-n="' + n + '" class="' + (szCfg.count === n ? "on" : "") + '">' + n + " 题</button>";
+    }).join("") + "</div>" +
+    '<button class="btn" style="margin-top:8px" id="start-sz">开始练习</button>' +
+    '<div class="muted" style="margin-top:12px;line-height:1.7">内容来源：新华社、人民日报、中国政府网、全国人大网等官方发布，题干解析注明来源与日期。时政覆盖 2025—2026 年重要会议、政策与事件，后续持续补充。</div>' +
+    "</div>";
+  main.innerHTML = html;
+  main.querySelectorAll("#sz-cats button").forEach(function (b) {
+    b.addEventListener("click", function () { szCfg.cat = b.dataset.c; renderShizheng(); });
+  });
+  main.querySelectorAll(".seg [data-n]").forEach(function (b) {
+    b.addEventListener("click", function () { szCfg.count = parseInt(b.dataset.n, 10); renderShizheng(); });
+  });
+  $("#start-sz").addEventListener("click", function () {
+    practiceCfg = { mode: "shizheng", count: szCfg.count };
+    startPractice();
+  });
+}
+
 /* ================= 易混 ================= */
 function renderConfus() {
   var html = "<h1>易混词</h1>";
@@ -636,7 +679,8 @@ function renderSettings() {
     "总词数 " + st.total + " · 已学 " + st.learned + " · 到期待复习 " + st.due_today + " · 错题 " + st.wrong_total +
     "<br>状态分布：新 " + st.by_status.new + " / 学习中 " + st.by_status.learning + " / 复习 " + st.by_status.review + " / 熟记 " + st.by_status.mature +
     "<br>题库：书内真题+生成题 " + QUESTIONS.length + " 道 · 四海题本 " + SIHAI.length + " 道" +
-    "<br><br>版本 v4" +
+    "<br>时政常识 " + SHIZHENG.length + " 道（2025-2026 时政 + 政史物化生常识）" +
+    "<br><br>版本 v5" +
     "</div></div>";
   $("#save-settings").addEventListener("click", function () {
     prog.settings.daily_new = Math.min(100, Math.max(1, parseInt($("#set-daily").value, 10) || 20));
